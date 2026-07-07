@@ -11,8 +11,8 @@ st.title("🗺️ 충남 지역화 학습 AI")
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # 모델명을 gemini-pro로 변경하여 안정성 확보
-        model = genai.GenerativeModel("gemini-pro")
+        # 가장 범용적인 모델 사용
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -27,7 +27,8 @@ if api_key:
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                instruction = "너는 충남 지역화 학습 가이드야. 정답을 바로 주지 말고 생각할 거리를 질문해줘. 한글로 대답해줘."
+                # 한글 답변을 강제하는 프롬프트
+                instruction = "You are a guide for 4th-grade students in Chungnam. Answer in Korean. Ask guiding questions to encourage thinking."
                 response = model.generate_content(instruction + prompt)
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
