@@ -1,15 +1,15 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. API 키 설정 (사이드바 입력 우선)
-st.sidebar.title("🛠️ 교사 설정")
-api_key = st.sidebar.text_input("Gemini API 키를 입력하세요:", type="password")
+# 사이드바에서 API 키를 입력받도록 설정
+st.sidebar.title("🛠️ Teacher Settings")
+api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
 
 if api_key:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
     
-    st.title("🗺️ 충청남도 지역화 학습 가이드")
+    st.title("🗺️ Chungnam Regional Learning AI")
     
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -18,21 +18,20 @@ if api_key:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("천안이나 아산에 대해 궁금한 점을 물어보세요!"):
+    if prompt := st.chat_input("Ask about Cheonan or Asan!"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # 시스템 프롬프트 강화
             full_prompt = f"""
-            너는 초등학교 4학년을 위한 충남 지역화 학습 가이드야.
-            정답을 바로 말하지 말고, 아이가 생각할 질문을 던져라.
-            번호나 항목명을 출력하지 말고 자연스러운 문장으로만 말해라.
-            질문: {prompt}
+            You are a guide for 4th-grade elementary students learning about Chungnam geography.
+            Do not provide direct answers. Ask thought-provoking questions to help students explore.
+            Do not include numbers, item names, or brackets in the output. Use natural sentences.
+            Question: {prompt}
             """
             response = model.generate_content(full_prompt)
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
 else:
-    st.warning("⚠️ 사이드바에 API 키를 입력해야 챗봇이 시작됩니다!")
+    st.warning("⚠️ Please enter your API key in the sidebar to start!")
