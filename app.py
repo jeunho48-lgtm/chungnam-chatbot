@@ -5,40 +5,45 @@ import google.generativeai as genai
 st.set_page_config(page_title="충남 지역화 AI", page_icon="🗺️")
 st.sidebar.title("🛠️ 설정")
 
-# API 키 입력
 api_key = st.sidebar.text_input("Gemini API 키 입력:", type="password").strip()
-
 st.title("🗺️ 충남 지역화 학습 AI")
 
 if api_key:
     try:
-        # 선생님 계정에서 확인된 모델명으로 정확히 수정
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-3-flash-preview")
+        
+        # 답변의 일관성을 위해 온도를 0으로 설정
+        generation_config = {"temperature": 0}
+        
+        # 모델 설정
+        model = genai.GenerativeModel(
+            model_name="gemini-3-flash-preview",
+            generation_config=generation_config,
+            system_instruction="너는 초등학교 4학년 학생들이 스스로 지리 데이터를 해석하고 탐구할 수 있도록 돕는 '충청남도 지역화 학습' 질문 가이드 AI야. 정답을 먼저 제시하지 말고, 발문을 통해 아이들이 생각할 기회를 주는 것이 네 가장 중요한 임무야. 본문이나 제목에 괄호나 숫자가 포함되면 삭제해. 아이가 물어보면 맞춤형 데이터와 발문만 제시해."
+        )
 
-        # 세션 상태 초기화
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
-        # 기존 대화 표시
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # 사용자 입력 처리
         if prompt := st.chat_input("궁금한 점을 물어보세요!"):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                instruction = "너는 초등학교 4학년 사회 지역화 학습 가이드야. 정답을 바로 주지 말고 아이들이 스스로 생각할 수 있도록 관련 지리 정보(인구, 기온, 지형, 산업 등)를 활용한 질문을 먼저 던져줘. 항상 친절한 한글로 대답해줘."
+                # 실제 데이터 기반 답변 생성
+                response = model.generate_content(prompt)
                 
-                # 모델 응답 생성
-                response = model.generate_content(instruction + prompt)
+                # 출력 전 필터링 (괄호, 숫자 삭제)
+                filtered_text = response.text.replace("(", "").replace(")", "")
                 
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                st.markdown(filtered_text)
+                st.session_state.messages.append({"role": "assistant", "content": filtered_text})
+                
     except Exception as e:
         st.error(f"오류: {e}")
 else:
