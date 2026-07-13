@@ -47,41 +47,50 @@ system_instruction = """
 """
 
 if valid_keys:
-    try:
-        current_key = next(st.session_state.key_cycle)
-        genai.configure(api_key=current_key)
-        
-        model = genai.GenerativeModel(
-            model_name="gemini-3-flash-preview",
-            generation_config={"temperature": 1.0},
-            system_instruction=system_instruction,
-            tools=[{"google_search_retrieval": {}}]
-        )
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    if prompt := st.chat_input("궁금한 점을 물어보세요!"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-        if prompt := st.chat_input("궁금한 점을 물어보세요!"):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+        with st.chat_message("assistant"):
+            # 키 순환 및 모델 호출 로직
+            success = False
+            for _ in range(len(valid_keys)):
+                try:
+                    current_key = next(st.session_state.key_cycle)
+                    genai.configure(api_key=current_key)
+                    model = genai.GenerativeModel(
+                        model_name="gemini-3-flash-preview",
+                        generation_config={"temperature": 1.0},
+                        system_instruction=system_instruction,
+                        tools=[{"google_search_retrieval": {}}]
+                    )
+                    response = model.generate_content(prompt)
+                    
+                    text = response.text
+                    text = re.sub(r'\(|\)', '', text)
+                    text = re.sub(r'^\d+\.\s', '', text, flags=re.MULTILINE)
+                    
+                    st.markdown(text)
+                    st.session_state.messages.append({"role": "assistant", "content": text})
+                    success = True
+                    break
+                except Exception as e:
+                    if "429" in str(e):
+                        continue
+                    else:
+                        st.error(f"오류: {e}")
+                        break
+            
+            if not success:
+                st.error("모든 API 키의 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요.")
 
-            with st.chat_message("assistant"):
-                response = model.generate_content(prompt)
-                
-                # 원치 않는 문자(괄호, 번호) 정제
-                text = response.text
-                text = re.sub(r'\(|\)', '', text)
-                text = re.sub(r'^\d+\.\s', '', text, flags=re.MULTILINE)
-                
-                st.markdown(text)
-                st.session_state.messages.append({"role": "assistant", "content": text})
-                
-    except Exception as e:
-        st.error(f"오류: {e}")
 else:
     st.info("👈 왼쪽 사이드바에 API 키를 최소 1개 이상 입력하세요.")
