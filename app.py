@@ -1,32 +1,26 @@
 import streamlit as st
 import google.generativeai as genai
-import itertools
-import re
 
 # 페이지 설정
-st.set_page_config(page_title="충남 지역화 학습 AI", page_icon="🗺️", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="충남 지역화 학습 AI", page_icon="🗺️")
 st.sidebar.title("🛠️ 설정")
-
-api_keys = [
-    st.sidebar.text_input("Gemini API 키 1:", type="password").strip(),
-    st.sidebar.text_input("Gemini API 키 2:", type="password").strip(),
-    st.sidebar.text_input("Gemini API 키 3:", type="password").strip()
-]
-valid_keys = [k for k in api_keys if k]
-
-if "key_cycle" not in st.session_state or st.session_state.get("last_keys") != valid_keys:
-    st.session_state.key_cycle = itertools.cycle(valid_keys) if valid_keys else None
-    st.session_state.last_keys = valid_keys
+api_key = st.sidebar.text_input("Gemini API 키 입력:", type="password").strip()
 
 st.title("🗺️ 충남 지역화 학습 AI")
 
-system_instruction = """
-너는 초등학교 4학년 사회 지역화 학습을 돕는 가이드야. 아래 규칙을 절대적으로 지켜라.
-1. 데이터 활용: 아래 [학습 지식 데이터]를 최우선으로 사용하여 답변해라. 부족한 정보는 실시간 검색을 활용해라.
-2. 표 형식: 데이터 정리 시 마크다운 표(Table)를 사용해라. 이후 표를 간단히 텍스트로 설명해라.
-3. 숫자 및 청결: 모든 수치는 아라비아 숫자로만 표기해라.
-4. 발문 제한: 답변 끝에는 반드시 딱 1개의 발문(질문)만 던져라.
-5. 구조: 설명은 핵심만 간결하게 하고, 질문과 관련된 시각 자료(링크)를 적절히 포함해.
+if api_key:
+    try:
+        genai.configure(api_key=api_key)
+        
+        # [핵심] AI 스튜디오와 동일한 수준의 지시사항 (강력한 규칙 설정)
+        system_instruction = """
+너는 초등학교 4학년 사회 지역화 학습을 돕는 전문 AI 가이드야. 다음 지침을 철저히 따라라.
+1. 표 형식 유지: 데이터 정리 시 마크다운 표(Table)를 사용해. 이후 텍스트로 풀어 써.
+2. 숫자 표기: 모든 수치는 '아라비아 숫자'로만 써. 한글 숫자 표기 금지.
+3. 데이터 활용: 아래 [학습 지식 데이터]를 최우선으로 사용하여 답변해라. 부족한 정보는 실시간 검색을 활용해라.
+4. 개별 정보 제공:  아이가 특정 정보만 콕 집어 물어보면, 전체 항목을 다 나열하지 말고 오직 해당 내용에만 집중해라. 데이터를 먼저 제시한 뒤 마지막에만 발문 1개를 던져.
+5. 최신성: 2026년 기준 데이터를 바탕으로 사실에 기반해 답변해.
+6. 구조: 설명은 핵심만 간결하게 하고, 질문과 관련된 시각 자료(링크)를 적절히 포함해.
 
 [학습 지식 데이터]
 1. 천안시: 위치(충남 북동), 면적(636.5㎢), 인구(691,000명), 지형(태조산, 광덕산, 곡교천), 기온(봄 11, 여름 24, 가을 13, 겨울 -1), 강수량(봄 200, 여름 750, 가을 210, 겨울 70), 산업(반도체, 배터리), 유산(독립기념관, 유관순사적지), 특산물(호두과자, 거봉포도, 신고배)
@@ -46,51 +40,32 @@ system_instruction = """
 15. 계룡시: 위치(충남 남동 내륙), 면적(60.7㎢), 인구(45,000명), 지형(계룡산, 고원), 기온(봄 11, 여름 24, 가을 13, 겨울 -1), 강수량(봄 200, 여름 750, 가을 210, 겨울 70), 산업(국방), 유산(계룡대, 사계고택), 특산물(계룡물엿, 팥거리떡)
 """
 
-if valid_keys:
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        # AI 스튜디오 설정(Temperature 1)과 동일하게 구성
+        model = genai.GenerativeModel(
+            model_name="gemini-3-flash-preview",
+            generation_config={"temperature": 1.0},
+            system_instruction=system_instruction
+        )
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    if prompt := st.chat_input("궁금한 점을 물어보세요!"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-        with st.chat_message("assistant"):
-            # 키 순환 및 모델 호출 로직
-            success = False
-            for _ in range(len(valid_keys)):
-                try:
-                    current_key = next(st.session_state.key_cycle)
-                    genai.configure(api_key=current_key)
-                    model = genai.GenerativeModel(
-                        model_name="gemini-3-flash-preview",
-                        generation_config={"temperature": 1.0},
-                        system_instruction=system_instruction,
-                        tools=[{"google_search_retrieval": {}}]
-                    )
-                    response = model.generate_content(prompt)
-                    
-                    text = response.text
-                    text = re.sub(r'\(|\)', '', text)
-                    text = re.sub(r'^\d+\.\s', '', text, flags=re.MULTILINE)
-                    
-                    st.markdown(text)
-                    st.session_state.messages.append({"role": "assistant", "content": text})
-                    success = True
-                    break
-                except Exception as e:
-                    if "429" in str(e):
-                        continue
-                    else:
-                        st.error(f"오류: {e}")
-                        break
-            
-            if not success:
-                st.error("모든 API 키의 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요.")
+        if prompt := st.chat_input("궁금한 점을 물어보세요!"):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
+            with st.chat_message("assistant"):
+                # [중요] re.sub 필터링을 제거하고 모델이 생성한 텍스트 그대로 출력 (표 깨짐 방지)
+                response = model.generate_content(prompt)
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                
+    except Exception as e:
+        st.error(f"오류: {e}")
 else:
-    st.info("👈 왼쪽 사이드바에 API 키를 최소 1개 이상 입력하세요.")
+    st.info("👈 왼쪽 사이드바에 API 키를 입력하세요.")
