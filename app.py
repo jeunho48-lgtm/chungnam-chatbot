@@ -1,19 +1,17 @@
 import streamlit as st
 import google.generativeai as genai
+import time
+import random
 
-# 페이지 설정
-st.set_page_config(page_title="충남 지역화 학습 AI", page_icon="🗺️")
-st.sidebar.title("🛠️ 설정")
-api_key = st.sidebar.text_input("Gemini API 키 입력:", type="password").strip()
-
-st.title("🗺️ 충남 지역화 학습 AI")
-
-if api_key:
-    try:
-        genai.configure(api_key=api_key)
-        
-        # [핵심] AI 스튜디오와 동일한 수준의 지시사항 (강력한 규칙 설정)
-        system_instruction = """
+# [추가] 캐시 함수: 동일한 질문은 API 호출 없이 저장된 결과를 반환
+@st.cache_data(ttl=3600)
+def get_ai_response(prompt, api_key):
+    genai.configure(api_key=api_key)
+    # 모델 정의를 함수 내부로 이동하여 캐시와 연동
+    model = genai.GenerativeModel(
+        model_name="gemini-3-flash-preview",
+        generation_config={"temperature": 1.0},
+        system_instruction="""
 너는 초등학교 4학년 사회 지역화 학습을 돕는 전문 AI 가이드야. 다음 지침을 철저히 따라라.
 1. 표 형식 유지: 데이터 정리 시 마크다운 표(Table)를 사용해. 이후 텍스트로 풀어 써.
 2. 숫자 표기: 모든 수치는 '아라비아 숫자'로만 써. 한글 숫자 표기 금지.
@@ -39,14 +37,23 @@ if api_key:
 14. 청양군: 위치(충남 중앙 내륙), 면적(479.1㎢), 인구(30,000명), 지형(칠갑산), 기온(봄 11, 여름 24, 가을 13, 겨울 -2), 강수량(봄 200, 여름 780, 가을 210, 겨울 70), 산업(농업, 산악관광), 유산(장곡사, 칠갑산천문대), 특산물(청양고추, 구기자, 밤)
 15. 계룡시: 위치(충남 남동 내륙), 면적(60.7㎢), 인구(45,000명), 지형(계룡산, 고원), 기온(봄 11, 여름 24, 가을 13, 겨울 -1), 강수량(봄 200, 여름 750, 가을 210, 겨울 70), 산업(국방), 유산(계룡대, 사계고택), 특산물(계룡물엿, 팥거리떡)
 """
+    )
+    
+    # [추가] 랜덤 대기 시간 (1.5초~3초)
+    time.sleep(random.uniform(1.5, 3.0))
+    
+    response = model.generate_content(prompt)
+    return response.text
 
-        # AI 스튜디오 설정(Temperature 1)과 동일하게 구성
-        model = genai.GenerativeModel(
-            model_name="gemini-3-flash-preview",
-            generation_config={"temperature": 1.0},
-            system_instruction=system_instruction
-        )
+# 페이지 설정
+st.set_page_config(page_title="충남 지역화 학습 AI", page_icon="🗺️")
+st.sidebar.title("🛠️ 설정")
+api_key = st.sidebar.text_input("Gemini API 키 입력:", type="password").strip()
 
+st.title("🗺️ 충남 지역화 학습 AI")
+
+if api_key:
+    try:
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
@@ -60,10 +67,10 @@ if api_key:
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                # [중요] re.sub 필터링을 제거하고 모델이 생성한 텍스트 그대로 출력 (표 깨짐 방지)
-                response = model.generate_content(prompt)
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                # [추가] 캐시 함수를 통해 결과 호출
+                response_text = get_ai_response(prompt, api_key)
+                st.markdown(response_text)
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
                 
     except Exception as e:
         st.error(f"오류: {e}")
