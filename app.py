@@ -2,49 +2,59 @@ import streamlit as st
 import google.generativeai as genai
 import re
 
+# 페이지 설정
 st.set_page_config(page_title="충남 지역화 학습 AI", page_icon="🗺️")
+st.sidebar.title("🛠️ 설정")
 api_key = st.sidebar.text_input("Gemini API 키 입력:", type="password").strip()
 
+st.title("🗺️ 충남 지역화 학습 AI")
+
 if api_key:
-    genai.configure(api_key=api_key)
-    
-    # 6가지 규칙이 완벽하게 반영된 시스템 지시사항
-    system_instruction = """
-너는 충청남도 지역화 학습 가이드야. 다음 규칙을 철저히 따라라.
-1. 질문에 집중: 질문과 관련된 데이터만 제시하고, 전체 개괄 설명은 하지 마.
-2. 정보 우선 제공: 질문에 대한 핵심 데이터를 먼저 제시한 후, 마지막에만 생각할 발문 1개를 던져.
-3. 숫자 표기: 모든 수치는 반드시 아라비아 숫자(예: 384,000)로 표기해. 한글 숫자는 금지.
-4. 정답 스포일러 금지: 인과관계나 정답을 미리 말하지 말고, 데이터를 보고 아이가 추론하게 해.
-5. 출력 필터링: 괄호(), 불필요한 숫자나 번호, '번 항목'은 모두 삭제해.
-6. 데이터 일치: 질문과 직접 관련된 시각 자료 1장만 제시하고 나머지는 생략해.
+    try:
+        genai.configure(api_key=api_key)
+        
+        # 시스템 지시사항 (정보 제공 우선, 발문 최소화, 필터링 강화)
+        system_instruction = """
+너는 초등학교 4학년 사회 지역화 학습 가이드야. 다음 규칙을 철저히 따라라.
+1. 정보 우선 제공: 질문을 받으면 관련된 지리 정보(인구, 기온, 지형, 산업 등)를 먼저 충분히 설명하고 시각 자료(링크 등)를 제시해.
+2. 답변 구조: 답변의 80%는 상세한 정보 전달과 데이터 해석으로 채우고, 마지막에만 아이가 생각할 수 있는 발문 1개를 던져.
+3. 데이터 신뢰성: 2026년 기준 최신 정보가 필요하면 알고 있는 지식을 활용하되, 최신 데이터를 확인하는 것처럼 사실에 기반하여 답변해.
+4. 출력 규칙: 괄호()나 번호(1., 2. 등)는 출력하기 전에 모두 제거하고 자연스러운 문장으로만 구성해.
 """
 
-    model = genai.GenerativeModel(
-        model_name="gemini-3-flash-preview",
-        generation_config={"temperature": 0.2},
-        system_instruction=system_instruction
-    )
+        # 모델 설정 (도구 제거로 429 오류 방지)
+        model = genai.GenerativeModel(
+            model_name="gemini-3-flash-preview",
+            generation_config={"temperature": 0.3},
+            system_instruction=system_instruction
+        )
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-    if prompt := st.chat_input("질문을 입력하세요!"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        if prompt := st.chat_input("궁금한 점을 물어보세요!"):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            # 질문에 따른 최신 정보 반영 요청
-            cmd = f"질문: {prompt}\n\n[지시: 질문 관련 핵심 정보만 아라비아 숫자로 제시하고, 마지막에 발문 1개만 해.]"
-            response = model.generate_content(cmd)
-            
-            # 필터링: 괄호 속 내용 및 숫자 삭제
-            text = re.sub(r'\([0-9,.\s]+\)', '', response.text)
-            text = re.sub(r'\d+\.\s', '', text)
-            
-            st.markdown(text)
-            st.session_state.messages.append({"role": "assistant", "content": text})
+            with st.chat_message("assistant"):
+                # 우회 검색 전략: 프롬프트에 검색 수행 명령을 추가
+                search_prompt = f"다음 질문에 대해 2026년 최신 데이터를 반영하여 상세히 답변해줘. [질문: {prompt}]"
+                
+                response = model.generate_content(search_prompt)
+                
+                # 출력 필터링 (정규표현식으로 괄호 안의 숫자와 번호 제거)
+                text = re.sub(r'\([0-9,.\s]+\)', '', response.text)
+                text = re.sub(r'\d+\.\s', '', text)
+                
+                st.markdown(text)
+                st.session_state.messages.append({"role": "assistant", "content": text})
+                
+    except Exception as e:
+        st.error(f"오류: {e}")
+else:
+    st.info("👈 왼쪽 사이드바에 API 키를 입력하세요.")
