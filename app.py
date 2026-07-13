@@ -1,6 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-import re
 
 # 페이지 설정
 st.set_page_config(page_title="충남 지역화 학습 AI", page_icon="🗺️")
@@ -13,19 +12,21 @@ if api_key:
     try:
         genai.configure(api_key=api_key)
         
-        # 시스템 지시사항 (정보 제공 우선, 발문 최소화, 필터링 강화)
+        # [핵심] AI 스튜디오와 동일한 수준의 지시사항 (강력한 규칙 설정)
         system_instruction = """
-너는 초등학교 4학년 사회 지역화 학습 가이드야. 다음 규칙을 철저히 따라라.
-1. 정보 우선 제공: 질문을 받으면 관련된 지리 정보(인구, 기온, 지형, 산업 등)를 먼저 충분히 설명하고 시각 자료(링크 등)를 제시해.
-2. 답변 구조: 답변의 80%는 상세한 정보 전달과 데이터 해석으로 채우고, 마지막에만 아이가 생각할 수 있는 발문 1개를 던져.
-3. 데이터 신뢰성: 2026년 기준 최신 정보가 필요하면 알고 있는 지식을 활용하되, 최신 데이터를 확인하는 것처럼 사실에 기반하여 답변해.
-4. 출력 규칙: 괄호()나 번호(1., 2. 등)는 출력하기 전에 모두 제거하고 자연스러운 문장으로만 구성해.
+너는 초등학교 4학년 사회 지역화 학습을 돕는 전문 AI 가이드야. 다음 지침을 철저히 따라라.
+1. 표 형식 유지: 데이터 정리 시 반드시 마크다운 표(Table)를 사용해. 절대 표를 텍스트로 풀어쓰지 마.
+2. 숫자 표기: 모든 수치는 '아라비아 숫자'로만 써. 한글 숫자 표기 금지.
+3. 정보 우선 제공: 정답을 미리 말하지 말고, 데이터를 먼저 제시한 뒤 마지막에만 발문 1개를 던져.
+4. 출력 청결: 괄호()나 번호(1. 2.)는 출력하지 마. 
+5. 최신성: 2026년 기준 데이터를 바탕으로 사실에 기반해 답변해.
+6. 구조: 설명은 핵심만 간결하게 하고, 질문과 관련된 시각 자료(링크)를 적절히 포함해.
 """
 
-        # 모델 설정 (도구 제거로 429 오류 방지)
+        # AI 스튜디오 설정(Temperature 1)과 동일하게 구성
         model = genai.GenerativeModel(
             model_name="gemini-3-flash-preview",
-            generation_config={"temperature": 0.3},
+            generation_config={"temperature": 1.0},
             system_instruction=system_instruction
         )
 
@@ -42,17 +43,10 @@ if api_key:
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                # 우회 검색 전략: 프롬프트에 검색 수행 명령을 추가
-                search_prompt = f"다음 질문에 대해 2026년 최신 데이터를 반영하여 상세히 답변해줘. [질문: {prompt}]"
-                
-                response = model.generate_content(search_prompt)
-                
-                # 출력 필터링 (정규표현식으로 괄호 안의 숫자와 번호 제거)
-                text = re.sub(r'\([0-9,.\s]+\)', '', response.text)
-                text = re.sub(r'\d+\.\s', '', text)
-                
-                st.markdown(text)
-                st.session_state.messages.append({"role": "assistant", "content": text})
+                # [중요] re.sub 필터링을 제거하고 모델이 생성한 텍스트 그대로 출력 (표 깨짐 방지)
+                response = model.generate_content(prompt)
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
                 
     except Exception as e:
         st.error(f"오류: {e}")
